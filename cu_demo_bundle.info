@@ -4,5 +4,6 @@ core = 7.x
 version = 1.0
 project = cu_demo_bundle
 project status url = https://github.com/CuBoulder/cu_demo_bundle
+bundle_group = admin_bundles
 
 stylesheets[all][] = css/cu-demo-bundle.css
