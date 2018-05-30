@@ -1,7 +1,7 @@
 name = Demo Site
 description = Disables most forms, makes all users site owners, manages back to site in header
 core = 7.x
-version = 1.0
+version = 7.x-1.2
 project = cu_demo_bundle
 project status url = https://github.com/CuBoulder/cu_demo_bundle
 bundle_group = admin_bundles
