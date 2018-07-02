@@ -1,0 +1,22 @@
+<?php
+
+/**
+* Implements hook_install().
+*/
+function cu_demo_bundle_install() {
+  // Set the weight to 1
+  db_update('system')
+    ->fields(array('weight' => 100))
+    ->condition('type', 'module')
+    ->condition('name', 'cu_demo_bundle')
+    ->execute();
+}
+
+function cu_demo_bundle_update_7001() {
+  // Set the weight to 1
+  db_update('system')
+    ->fields(array('weight' => 100))
+    ->condition('type', 'module')
+    ->condition('name', 'cu_demo_bundle')
+    ->execute();
+}

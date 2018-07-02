@@ -1,30 +1,116 @@
 <?php
 
 /**
+ * Implements hook_menu();
+ */
+ function cu_demo_bundle_menu() {
+   $items = array();
+   $items['admin/settings/demo'] = array(
+    'title' => 'Demo Mode',
+    'position' => 'right',
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('administer demo mode'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+  );
+   $items['admin/settings/demo/config'] = array(
+    'title' => 'Demo Mode Settings',
+    'description' => 'Enable/disable demo mode.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cu_demo_bundle_config_form'),
+    'access arguments' => array('administer demo mode'),
+  );
+  return $items;
+ }
+
+/**
+ * Implements hook_form().
+ */
+ function cu_demo_bundle_config_form($form, $form_state) {
+   $form = array();
+   $form['cu_demo_bundle_enable'] = array(
+     '#type' => 'radios',
+     '#options' => array(
+       '0' => 'Disable',
+       '1' => 'Enable'
+     ),
+     '#required' => TRUE,
+     '#default_value' => variable_get('cu_demo_bundle_enable', 0),
+     '#title' => 'Enable Demo Mode',
+     '#description' => 'Demo mode allows Web Express users to log in to a site and see how it was configured. These users have no edit access.',
+   );
+   $form = system_settings_form($form);
+   return $form;
+ }
+
+
+/**
+ * Implements hook_permission().
+ */
+function cu_demo_bundle_permission() {
+  return array(
+    'administer demo mode' => array(
+      'title' => t('Administer Demo Mode'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_secure_permissions_roles().
+ */
+function cu_demo_bundle_secure_permissions_roles() {
+  return array(
+    'demo_user',
+  );
+}
+
+/**
+ * Implements hook_secure_permissions().
+ */
+function cu_demo_bundle_secure_permissions($role) {
+  $permissions = array(
+    'administrator' => array(
+      'administer demo mode',
+    ),
+    'developer' => array(
+      'administer demo mode',
+    ),
+  );
+
+  if (isset($permissions[$role])) {
+    return $permissions[$role];
+  }
+  // Clone permissions from site_owner to demo_user.
+  _cu_demo_bundle_clone_permissions();
+}
+
+/**
+ * Clones permissions from site owner role to demo user role.
+ */
+function _cu_demo_bundle_clone_permissions() {
+  // Load site owner role to get role id and load role permissions.
+  $role = user_role_load_by_name('site_owner');
+  $site_owner_permissions = user_role_permissions(array($role->rid => $role->rid));
+  // Simplify array results.
+  $site_owner_permissions = current($site_owner_permissions);
+  // Get all permissions.
+  $modules = user_permission_get_modules();
+  // Make sure we are only granting permissions that exist.
+  $grant = array_intersect_key($site_owner_permissions, $modules);
+  // Load demo user role.
+  $role = user_role_load_by_name('demo_user');
+  // Add permissions from site owner to demo user.
+  user_role_change_permissions($role->rid, $grant);
+}
+
+/**
  * Implements hook_user_insert().
+ *
+ * When a user logs in, give them the demo user role.
  */
 function cu_demo_bundle_user_insert(&$edit, $account, $category) {
-
-  $role = user_role_load_by_name("site_owner");
+  $role = user_role_load_by_name("demo_user");
   user_multiple_role_edit(array($account->uid), 'add_role', $role->rid);
-
-}
-
-/**
- * Implements hook_menu_alter.
- */
-function cu_demo_bundle_menu_alter(&$items) {
-  if (!cu_users_check_user($user->name)) {
-    $items['admin/settings/bundles/list/confirm/%']['page callback'] = 'cu_demo_bundle_redirect';
-  }
-}
-
-/**
- * Callback function for admin/settings/bundles/list/confirm/%
- */
-function cu_demo_bundle_redirect() {
-  //drupal_set_message('This site is in demo mode.  Most forms are read-only.', 'status');
-  return '';
 }
 
 /**
@@ -33,14 +119,14 @@ function cu_demo_bundle_redirect() {
  */
 function cu_demo_bundle_form_alter(&$form, &$form_state, $form_id) {
   global $user;
-
-  if (cu_users_check_user(strtolower($user->name)) || $user->uid == 1) {
-    //drupal_set_message('This site is in demo mode.  Most forms are read-only for non-staff users.', 'status');
+  $demo_mode = variable_get('cu_demo_bundle_enable', 0);
+  // If demo mode is disabled user can administer demo mode, move on.
+  if (!$demo_mode || user_access('administer demo mode')) {
     return;
   }
-
- $exceptions = array('user_login', 'views_exposed_form', 'ctools_export_ui_list_form');
- if (!in_array($form_id, $exceptions)) {
+  // Otherwise, disable all form fields.
+  $exceptions = array('user_login', 'views_exposed_form', 'ctools_export_ui_list_form');
+  if (!in_array($form_id, $exceptions)) {
     $form['#after_build'][] = '_cu_demo_bundle_recursive';
     //drupal_set_message('This site is in demo mode.  Most forms are read-only.', 'status');
     if ($form_id !== 'views_exposed_form') {
@@ -63,7 +149,19 @@ function _cu_demo_bundle_invalidate($form, $form_state) {
 
 function cu_demo_bundle_page_alter(&$page) {
 
-  $page['page_top']['demo_nav'] = _cu_demo_bundle_navigation();
+  if (variable_get('cu_demo_bundle_enable', 0)) {
+    $page['page_top']['demo_nav'] = _cu_demo_bundle_navigation();
+
+    // If demo mode is enabled, enabling bundles needs to be disabled.
+    // Bundle confirm enable is not a real form so we will just remove the
+    // content from displaying.
+    $current_path = current_path();
+    $confirm_path = 'admin/settings/bundles/list/confirm';
+
+    if ((strpos($current_path, $confirm_path) !== false) && !user_access('administer demo mode')) {
+      $page['content']['#markup'] = 'Enabling bundles is currently locked.';
+    }
+  }
 }
 
 function _cu_demo_bundle_navigation() {
@@ -90,4 +188,15 @@ function _cu_demo_bundle_navigation() {
   $output['demo_nav']['#prefix'] = '<div class="demo-mode-nav">';
   $output['demo_nav']['#suffix'] = '</div>';
   return $output;
+}
+
+/*
+ * Implements hook_content_lock_node_lockable().
+ *
+ * Disable content locking if demo mode is on.
+ */
+function cu_demo_bundle_content_lock_node_lockable($node) {
+  if (variable_get('cu_demo_bundle_enable', 0)) {
+    return FALSE;
+  }
 }
