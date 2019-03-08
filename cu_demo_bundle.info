@@ -7,3 +7,6 @@ project status url = https://github.com/CuBoulder/cu_demo_bundle
 bundle_group = admin_bundles
 
 stylesheets[all][] = css/cu-demo-bundle.css
+
+bundle_roles[] = developer
+bundle_roles[] = administrator
